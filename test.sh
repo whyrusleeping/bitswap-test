@@ -6,9 +6,13 @@ NUMNODES=5
 
 runtitle="$1"
 
-iptb init -f -n $NUMNODES
+iptb init -f -n $NUMNODES --type=docker
+
+iptb for-each ipfs config --json Datastore.NoSync true
 
 iptb start
+
+echo "nodes started"
 
 ipfsi() {
 	local n=$1
@@ -16,15 +20,7 @@ ipfsi() {
 	IPFS_PATH=$IPTB_ROOT/$n ipfs $@
 }
 
-fixcfg() {
-	ipfsi $1 config --json Datastore.NoSync true
-}
-
-fixcfg 0
-fixcfg 1
-fixcfg 2
-fixcfg 3
-fixcfg 4
+sudo -E iptb set latency 10ms '[0-4]'
 
 echo "connecting nodes..."
 
@@ -44,18 +40,19 @@ HASH=$(ipfsi 0 add -r -q stuff | tail -n 1)
 
 echo "Added content: $HASH"
 
-ipfsi 1 pin add $HASH
-ipfsi 2 pin add $HASH
-ipfsi 3 pin add $HASH
-ipfsi 4 pin add $HASH
+/bin/time -f "%E" iptb run 1 ipfs pin add $HASH 2> time_1
+/bin/time -f "%E" iptb run 2 ipfs pin add $HASH 2> time_2
+/bin/time -f "%E" iptb run 3 ipfs pin add $HASH 2> time_3
+/bin/time -f "%E" iptb run 4 ipfs pin add $HASH 2> time_4
 
-dup1=$(ipfsi 1 bitswap stat --enc=json | jq .DupBlksReceived)
-dup2=$(ipfsi 2 bitswap stat --enc=json | jq .DupBlksReceived)
-dup3=$(ipfsi 3 bitswap stat --enc=json | jq .DupBlksReceived)
-dup4=$(ipfsi 4 bitswap stat --enc=json | jq .DupBlksReceived)
+dup1=$(iptb run 1 ipfs bitswap stat --enc=json | jq .DupBlksReceived)
+dup2=$(iptb run 2 ipfs bitswap stat --enc=json | jq .DupBlksReceived)
+dup3=$(iptb run 3 ipfs bitswap stat --enc=json | jq .DupBlksReceived)
+dup4=$(iptb run 4 ipfs bitswap stat --enc=json | jq .DupBlksReceived)
 
-totalblocks=$(ipfsi 0 refs -r $HASH | wc -l)
+totalblocks=$(iptb run 0 ipfs refs -r $HASH | wc -l)
 
 echo $runtitle $totalblocks $dup1 $dup2 $dup3 $dup4
-printf "%s,%s,%s,%s,%s,%s\n" $runtitle $totalblocks $dup1 $dup2 $dup3 $dup4 >> results.csv
+printf "%s,%s,%s,%s,%s,%s," $runtitle $totalblocks $dup1 $dup2 $dup3 $dup4 >> results.csv
+printf "%s,%s,%s,%s\n" $(cat time_1) $(cat time_2) $(cat time_3) $(cat time_4) >> results.csv
 iptb kill
