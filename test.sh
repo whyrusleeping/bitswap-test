@@ -1,5 +1,11 @@
 #!/bin/bash
 
+ipfsi() {
+	local n=$1
+	shift
+	IPFS_PATH=$IPTB_ROOT/$n ipfs $@
+}
+
 export IPTB_ROOT=$(pwd)/testbed
 
 NUMNODES=5
@@ -8,17 +14,14 @@ runtitle="$1"
 
 iptb init -f -n $NUMNODES --type=docker
 
-iptb for-each ipfs config --json Datastore.NoSync true
+for i in `seq 0 4`
+do
+	ipfsi $i config --json Datastore.NoSync true
+done
 
 iptb start
 
 echo "nodes started"
-
-ipfsi() {
-	local n=$1
-	shift
-	IPFS_PATH=$IPTB_ROOT/$n ipfs $@
-}
 
 sudo -E iptb set latency 10ms '[0-4]'
 
@@ -32,7 +35,7 @@ iptb connect 0 4
 echo "creating random files..."
 
 rm -rf stuff
-random-files -depth=3 -dirs=6 -files=10 stuff > /dev/null
+random-files -depth=4 -dirs=5 -files=10 stuff > /dev/null
 
 echo "adding files on node 0..."
 
